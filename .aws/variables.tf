@@ -19,9 +19,9 @@ variable "domain" {
 }
 
 variable "environment" {
-	description = "Environment for the application"
+  description = "Environment for the application"
 }
 
 variable "availability_zones" {
-	type = list(string)
+  type = list(string)
 }

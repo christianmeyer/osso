@@ -31,7 +31,7 @@ resource "aws_cloudwatch_log_group" "osso" {
   name = "osso"
 
   tags = {
-    Environment = "${var.environment}"
+    Environment = var.environment
     Application = "osso"
   }
 }
@@ -40,7 +40,7 @@ resource "aws_cloudwatch_log_group" "osso" {
 ECR repository to store our Docker images
 ======*/
 resource "aws_ecr_repository" "osso_app" {
-  name = "${var.repository_name}"
+  name = var.repository_name
 }
 
 /*====
@@ -56,58 +56,58 @@ ECS task definitions
 
 /* the task definition for the web service */
 data "template_file" "web_task" {
-  template = "${file("${path.module}/tasks/web_task_definition.json")}"
+  template = file("${path.module}/tasks/web_task_definition.json")
 
   vars = {
-    image           = "${aws_ecr_repository.osso_app.repository_url}"
-    session_secret  = local.session_secret
-    database_url    = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
-    log_group       = "${aws_cloudwatch_log_group.osso.name}"
-    base_url        = "https://aws.ossoapp.io"
-    smtp_login      = local.smtp_creds.smtp_login
-    smtp_password   = local.smtp_creds.smtp_password
-    smtp_domain     = local.smtp_creds.smtp_domain
-    smtp_server     = local.smtp_creds.smtp_server
+    image          = aws_ecr_repository.osso_app.repository_url
+    session_secret = local.session_secret
+    database_url   = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
+    log_group      = aws_cloudwatch_log_group.osso.name
+    base_url       = "https://aws.ossoapp.io"
+    smtp_login     = local.smtp_creds.smtp_login
+    smtp_password  = local.smtp_creds.smtp_password
+    smtp_domain    = local.smtp_creds.smtp_domain
+    smtp_server    = local.smtp_creds.smtp_server
   }
 }
 
 resource "aws_ecs_task_definition" "web" {
   family                   = "${var.environment}_web"
-  container_definitions    = "${data.template_file.web_task.rendered}"
+  container_definitions    = data.template_file.web_task.rendered
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "256"
   memory                   = "512"
-  execution_role_arn       = "${aws_iam_role.ecs_execution_role.arn}"
-  task_role_arn            = "${aws_iam_role.ecs_execution_role.arn}"
+  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_execution_role.arn
 }
 
 /* the task definition for the db migration */
 data "template_file" "db_migrate_task" {
-  template = "${file("${path.module}/tasks/db_migrate_task_definition.json")}"
+  template = file("${path.module}/tasks/db_migrate_task_definition.json")
 
   vars = {
-    image           = "sambauch/osso"
-    session_secret  = local.session_secret
-    database_url    = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
-    log_group       = "osso"
-    base_url        = "https://aws.ossoapp.io"
-    smtp_login      = local.smtp_creds.smtp_login
-    smtp_password   = local.smtp_creds.smtp_password
-    smtp_domain     = local.smtp_creds.smtp_domain
-    smtp_server     = local.smtp_creds.smtp_server
+    image          = "sambauch/osso"
+    session_secret = local.session_secret
+    database_url   = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
+    log_group      = "osso"
+    base_url       = "https://aws.ossoapp.io"
+    smtp_login     = local.smtp_creds.smtp_login
+    smtp_password  = local.smtp_creds.smtp_password
+    smtp_domain    = local.smtp_creds.smtp_domain
+    smtp_server    = local.smtp_creds.smtp_server
   }
 }
 
 resource "aws_ecs_task_definition" "db_migrate" {
   family                   = "${var.environment}_db_migrate"
-  container_definitions    = "${data.template_file.db_migrate_task.rendered}"
+  container_definitions    = data.template_file.db_migrate_task.rendered
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "256"
   memory                   = "512"
-  execution_role_arn       = "${aws_iam_role.ecs_execution_role.arn}"
-  task_role_arn            = "${aws_iam_role.ecs_execution_role.arn}"
+  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_execution_role.arn
 }
 
 /*====
@@ -118,10 +118,10 @@ resource "random_id" "target_group_sufix" {
 }
 
 resource "aws_alb_target_group" "alb_target_group" {
-  name     = "${var.environment}-alb-target-group-${random_id.target_group_sufix.hex}"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = "${var.vpc_id}"
+  name        = "${var.environment}-alb-target-group-${random_id.target_group_sufix.hex}"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
   target_type = "ip"
 
   lifecycle {
@@ -133,7 +133,7 @@ resource "aws_alb_target_group" "alb_target_group" {
 resource "aws_security_group" "web_inbound_sg" {
   name        = "${var.environment}-web-inbound-sg"
   description = "Allow HTTP from Anywhere into ALB"
-  vpc_id      = "${var.vpc_id}"
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port   = 80
@@ -163,23 +163,23 @@ resource "aws_security_group" "web_inbound_sg" {
 
 resource "aws_alb" "alb_osso" {
   name            = "${var.environment}-alb-rails-terraform"
-  subnets         = "${var.public_subnet_ids}"
-  security_groups = "${concat(var.security_groups_ids, [aws_security_group.web_inbound_sg.id])}"
+  subnets         = var.public_subnet_ids
+  security_groups = concat(var.security_groups_ids, [aws_security_group.web_inbound_sg.id])
 
   tags = {
     Name        = "${var.environment}-alb-osso"
-    Environment = "${var.environment}"
+    Environment = var.environment
   }
 }
 
 resource "aws_alb_listener" "osso" {
-  load_balancer_arn = "${aws_alb.alb_osso.arn}"
+  load_balancer_arn = aws_alb.alb_osso.arn
   port              = "80"
   protocol          = "HTTP"
-  depends_on        = ["aws_alb_target_group.alb_target_group"]
+  depends_on        = [aws_alb_target_group.alb_target_group]
 
   default_action {
-    target_group_arn = "${aws_alb_target_group.alb_target_group.arn}"
+    target_group_arn = aws_alb_target_group.alb_target_group.arn
     type             = "forward"
   }
 }
@@ -189,10 +189,10 @@ resource "aws_alb_listener" "osso" {
 */
 data "aws_iam_policy_document" "ecs_service_role" {
   statement {
-    effect = "Allow"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["ecs.amazonaws.com"]
     }
   }
@@ -200,12 +200,12 @@ data "aws_iam_policy_document" "ecs_service_role" {
 
 resource "aws_iam_role" "ecs_role" {
   name               = "ecs_role"
-  assume_role_policy = "${data.aws_iam_policy_document.ecs_service_role.json}"
+  assume_role_policy = data.aws_iam_policy_document.ecs_service_role.json
 }
 
 data "aws_iam_policy_document" "ecs_service_policy" {
   statement {
-    effect = "Allow"
+    effect    = "Allow"
     resources = ["*"]
     actions = [
       "elasticloadbalancing:Describe*",
@@ -219,22 +219,22 @@ data "aws_iam_policy_document" "ecs_service_policy" {
 
 /* ecs service scheduler role */
 resource "aws_iam_role_policy" "ecs_service_role_policy" {
-  name   = "ecs_service_role_policy"
-  #policy = "${file("${path.module}/policies/ecs-service-role.json")}"
-  policy = "${data.aws_iam_policy_document.ecs_service_policy.json}"
-  role   = "${aws_iam_role.ecs_role.id}"
+  name = "ecs_service_role_policy"
+  #policy = file("${path.module}/policies/ecs-service-role.json")
+  policy = data.aws_iam_policy_document.ecs_service_policy.json
+  role   = aws_iam_role.ecs_role.id
 }
 
 /* role that the Amazon ECS container agent and the Docker daemon can assume */
 resource "aws_iam_role" "ecs_execution_role" {
   name               = "ecs_task_execution_role"
-  assume_role_policy = "${file("${path.module}/policies/ecs-task-execution-role.json")}"
+  assume_role_policy = file("${path.module}/policies/ecs-task-execution-role.json")
 }
 
 resource "aws_iam_role_policy" "ecs_execution_role_policy" {
   name   = "ecs_execution_role_policy"
-  policy = "${file("${path.module}/policies/ecs-execution-role-policy.json")}"
-  role   = "${aws_iam_role.ecs_execution_role.id}"
+  policy = file("${path.module}/policies/ecs-execution-role-policy.json")
+  role   = aws_iam_role.ecs_execution_role.id
 }
 
 /*====
@@ -243,7 +243,7 @@ ECS service
 
 /* Security Group for ECS */
 resource "aws_security_group" "ecs_service" {
-  vpc_id      = "${var.vpc_id}"
+  vpc_id      = var.vpc_id
   name        = "${var.environment}-ecs-service-sg"
   description = "Allow egress from container"
 
@@ -263,36 +263,36 @@ resource "aws_security_group" "ecs_service" {
 
   tags = {
     Name        = "${var.environment}-ecs-service-sg"
-    Environment = "${var.environment}"
+    Environment = var.environment
   }
 }
 
 /* Simply specify the family to find the latest ACTIVE revision in that family */
 data "aws_ecs_task_definition" "web" {
-  task_definition = "${aws_ecs_task_definition.web.family}"
-  depends_on = [ "aws_ecs_task_definition.web" ]
+  task_definition = aws_ecs_task_definition.web.family
+  depends_on      = [aws_ecs_task_definition.web]
 }
 
 resource "aws_ecs_service" "web" {
   name            = "${var.environment}-web"
-  task_definition = "${aws_ecs_task_definition.web.family}:${max("${aws_ecs_task_definition.web.revision}", "${data.aws_ecs_task_definition.web.revision}")}"
+  task_definition = "${aws_ecs_task_definition.web.family}:${max(aws_ecs_task_definition.web.revision, data.aws_ecs_task_definition.web.revision)}"
   desired_count   = 2
   launch_type     = "FARGATE"
-  cluster =       "${aws_ecs_cluster.cluster.id}"
-  depends_on      = ["aws_iam_role_policy.ecs_service_role_policy", "aws_alb_target_group.alb_target_group"]
+  cluster         = aws_ecs_cluster.cluster.id
+  depends_on      = [aws_iam_role_policy.ecs_service_role_policy, aws_alb_target_group.alb_target_group]
 
   network_configuration {
-    security_groups = "${concat(var.security_groups_ids, [aws_security_group.ecs_service.id])}"
-    subnets         = "${var.subnets_ids}"
+    security_groups = concat(var.security_groups_ids, [aws_security_group.ecs_service.id])
+    subnets         = var.subnets_ids
   }
 
   load_balancer {
-    target_group_arn = "${aws_alb_target_group.alb_target_group.arn}"
+    target_group_arn = aws_alb_target_group.alb_target_group.arn
     container_name   = "web"
     container_port   = "80"
   }
 
-  #depends_on = ["aws_alb_target_group.alb_target_group"]
+  #depends_on = [aws_alb_target_group.alb_target_group]
 }
 
 
@@ -302,28 +302,28 @@ Auto Scaling for ECS
 
 resource "aws_iam_role" "ecs_autoscale_role" {
   name               = "${var.environment}_ecs_autoscale_role"
-  assume_role_policy = "${file("${path.module}/policies/ecs-autoscale-role.json")}"
+  assume_role_policy = file("${path.module}/policies/ecs-autoscale-role.json")
 }
 resource "aws_iam_role_policy" "ecs_autoscale_role_policy" {
   name   = "ecs_autoscale_role_policy"
-  policy = "${file("${path.module}/policies/ecs-autoscale-role-policy.json")}"
-  role   = "${aws_iam_role.ecs_autoscale_role.id}"
+  policy = file("${path.module}/policies/ecs-autoscale-role-policy.json")
+  role   = aws_iam_role.ecs_autoscale_role.id
 }
 
 resource "aws_appautoscaling_target" "target" {
   service_namespace  = "ecs"
   resource_id        = "service/${aws_ecs_cluster.cluster.name}/${aws_ecs_service.web.name}"
   scalable_dimension = "ecs:service:DesiredCount"
-  role_arn           = "${aws_iam_role.ecs_autoscale_role.arn}"
+  role_arn           = aws_iam_role.ecs_autoscale_role.arn
   min_capacity       = 2
   max_capacity       = 4
 }
 
 resource "aws_appautoscaling_policy" "up" {
-  name                    = "${var.environment}_scale_up"
-  service_namespace       = "ecs"
-  resource_id             = "service/${aws_ecs_cluster.cluster.name}/${aws_ecs_service.web.name}"
-  scalable_dimension      = "ecs:service:DesiredCount"
+  name               = "${var.environment}_scale_up"
+  service_namespace  = "ecs"
+  resource_id        = "service/${aws_ecs_cluster.cluster.name}/${aws_ecs_service.web.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
 
 
   step_scaling_policy_configuration {
@@ -333,18 +333,18 @@ resource "aws_appautoscaling_policy" "up" {
 
     step_adjustment {
       metric_interval_lower_bound = 0
-      scaling_adjustment = 1
+      scaling_adjustment          = 1
     }
   }
 
-  depends_on = ["aws_appautoscaling_target.target"]
+  depends_on = [aws_appautoscaling_target.target]
 }
 
 resource "aws_appautoscaling_policy" "down" {
-  name                    = "${var.environment}_scale_down"
-  service_namespace       = "ecs"
-  resource_id             = "service/${aws_ecs_cluster.cluster.name}/${aws_ecs_service.web.name}"
-  scalable_dimension      = "ecs:service:DesiredCount"
+  name               = "${var.environment}_scale_down"
+  service_namespace  = "ecs"
+  resource_id        = "service/${aws_ecs_cluster.cluster.name}/${aws_ecs_service.web.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
 
   step_scaling_policy_configuration {
     adjustment_type         = "ChangeInCapacity"
@@ -353,11 +353,11 @@ resource "aws_appautoscaling_policy" "down" {
 
     step_adjustment {
       metric_interval_lower_bound = 0
-      scaling_adjustment = -1
+      scaling_adjustment          = -1
     }
   }
 
-  depends_on = ["aws_appautoscaling_target.target"]
+  depends_on = [aws_appautoscaling_target.target]
 }
 
 /* metric used for auto scale */
@@ -372,11 +372,11 @@ resource "aws_cloudwatch_metric_alarm" "service_cpu_high" {
   threshold           = "85"
 
   dimensions = {
-    ClusterName = "${aws_ecs_cluster.cluster.name}"
-    ServiceName = "${aws_ecs_service.web.name}"
+    ClusterName = aws_ecs_cluster.cluster.name
+    ServiceName = aws_ecs_service.web.name
   }
 
-  alarm_actions = ["${aws_appautoscaling_policy.up.arn}"]
-  ok_actions    = ["${aws_appautoscaling_policy.down.arn}"]
+  alarm_actions = [aws_appautoscaling_policy.up.arn]
+  ok_actions    = [aws_appautoscaling_policy.down.arn]
 }
 

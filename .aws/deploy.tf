@@ -2,11 +2,6 @@
 Variables used across all modules
 ======*/
 
-provider "aws" {
-  region = var.region
-  version = "~> 2.0"
-}
-
 data "aws_secretsmanager_secret_version" "creds" {
   secret_id = "db-creds"
 }
@@ -42,18 +37,18 @@ module "rds" {
 }
 
 module "ecs" {
-  source             = "./modules/ecs"
-  environment        = var.environment
-  vpc_id             = module.networking.vpc_id
-  availability_zones = local.availability_zones
-  repository_name    = "enterprise-oss/osso"
-  subnets_ids        = module.networking.private_subnets_id
-  public_subnet_ids  = module.networking.public_subnets_id
+  source              = "./modules/ecs"
+  environment         = var.environment
+  vpc_id              = module.networking.vpc_id
+  availability_zones  = local.availability_zones
+  repository_name     = "enterprise-oss/osso"
+  subnets_ids         = module.networking.private_subnets_id
+  public_subnet_ids   = module.networking.public_subnets_id
   security_groups_ids = concat([module.rds.db_access_sg_id], module.networking.security_groups_ids)
-  database_endpoint = module.rds.rds_address
-  database_name     = var.database_name
-  database_username = local.db_creds.username
-  database_password = local.db_creds.password
-  secret_key_base   = var.secret_key_base
+  database_endpoint   = module.rds.rds_address
+  database_name       = var.database_name
+  database_username   = local.db_creds.username
+  database_password   = local.db_creds.password
+  secret_key_base     = var.secret_key_base
 }
 
