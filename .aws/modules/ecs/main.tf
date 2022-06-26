@@ -29,11 +29,6 @@ Cloudwatch Log Group
 ======*/
 resource "aws_cloudwatch_log_group" "osso" {
   name = "osso"
-
-  tags = {
-    Environment = var.environment
-    Application = "osso"
-  }
 }
 
 /*====
@@ -167,8 +162,7 @@ resource "aws_alb" "alb_osso" {
   security_groups = concat(var.security_groups_ids, [aws_security_group.web_inbound_sg.id])
 
   tags = {
-    Name        = "${var.environment}-alb-osso"
-    Environment = var.environment
+    Name = "${var.environment}-alb-osso"
   }
 }
 
@@ -287,8 +281,7 @@ resource "aws_security_group" "ecs_service" {
   }
 
   tags = {
-    Name        = "${var.environment}-ecs-service-sg"
-    Environment = var.environment
+    Name = "${var.environment}-ecs-service-sg"
   }
 }
 
