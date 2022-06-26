@@ -24,7 +24,7 @@ if ENV['RACK_ENV'] == 'production'
       address: ENV['SMTP_SERVER'],
       user_name: ENV['SMTP_LOGIN'],
       password: ENV['SMTP_PASSWORD'],
-      domain: ENV['SMTP_DOMAIN'],
+      domain: (ENV['SMTP_DOMAIN']).to_s,
       authentication: :plain,
     }
   end
@@ -34,9 +34,16 @@ app = Rack::Builder.new do
   use Raven::Rack if use_sentry
 
   use Rack::Cors do
-    allow do
-      origins '*'
-      resource '/graphql', headers: :any, methods: %i[post options]
+    if ENV['CORS_ORIGINS']
+      allow do
+        origins *ENV['CORS_ORIGINS'].split(',')
+        resource '/graphql', headers: :any, methods: %i[post options]
+      end
+
+      allow do
+        origins *ENV['CORS_ORIGINS'].split(',')
+        resource '/idp', headers: :any, methods: %i[post options]
+      end
     end
   end
 

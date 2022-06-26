@@ -6,17 +6,15 @@ ruby '2.6.6'
 
 source 'https://rubygems.org'
 
-gem 'activesupport', '>= 6.0.3.2'
-gem 'graphql'
-gem 'osso', '= 0.0.11'
+gem 'activesupport', '~> 6.1.3'
+gem 'osso', '~> 0.1.2'
 gem 'pg'
+gem 'puma'
 gem 'rack', '>= 2.1.4'
 gem 'rack-cors'
 gem 'rake'
-gem 'sinatra'
 gem 'sentry-raven'
-
-gem 'sinatra-activerecord', '2.0.20'
+gem 'sinatra'
 
 group :test do
   gem 'database_cleaner-active_record'
@@ -25,7 +23,7 @@ group :test do
   gem 'rack-test'
   gem 'rspec', '~> 3.10'
   gem 'simplecov', '0.21.2', require: false
-  gem 'webmock', '~> 3.11'
+  gem 'webmock', '~> 3.12'
 end
 
 group :development, :test do

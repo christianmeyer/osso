@@ -3,8 +3,6 @@ import { createOauthClient } from '@enterprise-oss/osso';
 import { Button, Form, Input, Modal } from 'antd';
 import React, { ReactElement, useState } from 'react';
 
-import styles from './index.module.css';
-
 export default function CreateAccountButton(): ReactElement {
   const { createClient, loading } = createOauthClient();
   const [modalOpen, setModalOpen] = useState(false);
@@ -26,7 +24,7 @@ export default function CreateAccountButton(): ReactElement {
         title="New Oauth Client"
         onCancel={() => setModalOpen(false)}
         footer={
-          <div className={styles.buttonRow}>
+          <div>
             <Button onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button
               type="primary"
@@ -62,7 +60,10 @@ export default function CreateAccountButton(): ReactElement {
             name="name"
             rules={[{ required: true, message: 'Add a name' }]}
           >
-            <Input id="name" placeholder="Amazing SAAS App - Production" />
+            <Input
+              id="client-name"
+              placeholder="Amazing SAAS App - Production"
+            />
           </Form.Item>
         </Form>
       </Modal>
