@@ -18,8 +18,12 @@ locals {
 
 resource "aws_s3_bucket" "source" {
   bucket        = "osso-source"
-  acl           = "private"
   force_destroy = true
+}
+
+resource "aws_s3_bucket_acl" "source" {
+  bucket = aws_s3_bucket.source
+  acl    = "private"
 }
 
 resource "aws_iam_role" "codepipeline_role" {
