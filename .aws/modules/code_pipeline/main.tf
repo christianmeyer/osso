@@ -26,48 +26,191 @@ resource "aws_s3_bucket_acl" "source" {
   acl    = "private"
 }
 
-resource "aws_iam_role" "codepipeline_role" {
-  name = "codepipeline-role"
+data "aws_iam_policy_document" "codepipeline_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["codepipeline.amazonaws.com"]
+    }
+  }
+}
 
-  assume_role_policy = file("${path.module}/policies/codepipeline_role.json")
+resource "aws_iam_role" "codepipeline_role" {
+  name               = "codepipeline-role"
+  assume_role_policy = data.aws_iam_policy_document.codepipeline_role.json
 }
 
 /* policies */
-data "template_file" "codepipeline_policy" {
-  template = file("${path.module}/policies/codepipeline.json")
-
-  vars = {
-    aws_s3_bucket_arn = aws_s3_bucket.source.arn
+data "aws_iam_policy_document" "codepipeline_policy" {
+  statement {
+    effect = "Allow"
+    resources = [
+      aws_s3_bucket.source.arn,
+      "${aws_s3_bucket.source.arn}/*"
+    ]
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:GetBucketVersioning",
+      "s3:List*",
+      "s3:PutObject"
+    ]
+  }
+  statement {
+    effect    = "Allow"
+    resources = ["*"]
+    actions = [
+      "codebuild:BatchGetBuilds",
+      "codebuild:StartBuild"
+    ]
+  }
+  statement {
+    effect    = "Allow"
+    resources = ["*"]
+    actions = [
+      "ecs:*",
+      "events:DescribeRule",
+      "events:DeleteRule",
+      "events:ListRuleNamesByTarget",
+      "events:ListTargetsByRule",
+      "events:PutRule",
+      "events:PutTargets",
+      "events:RemoveTargets",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfiles",
+      "iam:ListRoles",
+      "logs:CreateLogGroup",
+      "logs:DescribeLogGroups",
+      "logs:FilterLogEvents"
+    ]
+  }
+  statement {
+    effect    = "Allow"
+    resources = ["*"]
+    actions = [
+      "iam:PassRole"
+    ]
+    condition {
+      test     = "StringLike"
+      variable = "iam:PassedToService"
+      values = [
+        "ecs-tasks.amazonaws.com"
+      ]
+    }
+  }
+  statement {
+    effect    = "Allow"
+    resources = ["arn:aws:iam::*:role/ecsInstanceRole*"]
+    actions = [
+      "iam:PassRole"
+    ]
+    condition {
+      test     = "StringLike"
+      variable = "iam:PassedToService"
+      values = [
+        "ec2.amazonaws.com",
+        "ec2.amazonaws.com.cn"
+      ]
+    }
+  }
+  statement {
+    effect    = "Allow"
+    resources = ["arn:aws:iam::*:role/ecsAutoscaleRole*"]
+    actions = [
+      "iam:PassRole"
+    ]
+    condition {
+      test     = "StringLike"
+      variable = "iam:PassedToService"
+      values = [
+        "application-autoscaling.amazonaws.com",
+        "application-autoscaling.amazonaws.com.cn"
+      ]
+    }
+  }
+  statement {
+    effect    = "Allow"
+    resources = ["*"]
+    actions = [
+      "iam:CreateServiceLinkedRole"
+    ]
+    condition {
+      test     = "StringLike"
+      variable = "iam:AWSServiceName"
+      values = [
+        "ecs.amazonaws.com",
+        "spot.amazonaws.com",
+        "spotfleet.amazonaws.com"
+      ]
+    }
   }
 }
 
 resource "aws_iam_role_policy" "codepipeline_policy" {
   name   = "codepipeline_policy"
   role   = aws_iam_role.codepipeline_role.id
-  policy = data.template_file.codepipeline_policy.rendered
+  policy = data.aws_iam_policy_document.codepipeline_policy.json
 }
 
 /*
 /* CodeBuild
 */
-resource "aws_iam_role" "codebuild_role" {
-  name               = "codebuild-role"
-  assume_role_policy = file("${path.module}/policies/codebuild_role.json")
+data "aws_iam_policy_document" "codebuild_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["codebuild.amazonaws.com"]
+    }
+  }
 }
 
-data "template_file" "codebuild_policy" {
-  template = file("${path.module}/policies/codebuild_policy.json")
+resource "aws_iam_role" "codebuild_role" {
+  name               = "codebuild-role"
+  assume_role_policy = data.aws_iam_policy_document.codebuild_role.json
+}
 
-  vars = {
-    aws_s3_bucket_arn = aws_s3_bucket.source.arn
-    region            = var.region
+data "aws_iam_policy_document" "codebuild_policy" {
+  statement {
+    effect = "Allow"
+    resources = [
+      aws_s3_bucket.source.arn,
+      "${aws_s3_bucket.source.arn}/*"
+    ]
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:GetBucketVersioning",
+      "s3:List*",
+      "s3:PutObject"
+    ]
+  }
+  statement {
+    effect    = "Allow"
+    resources = ["*"]
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "ecr:GetAuthorizationToken",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:PutImage",
+      "ecs:RunTask",
+      "iam:PassRole"
+    ]
   }
 }
 
 resource "aws_iam_role_policy" "codebuild_policy" {
   name   = "codebuild-policy"
   role   = aws_iam_role.codebuild_role.id
-  policy = data.template_file.codebuild_policy.rendered
+  policy = data.aws_iam_policy_document.codebuild_policy.json
 }
 
 data "template_file" "buildspec" {
