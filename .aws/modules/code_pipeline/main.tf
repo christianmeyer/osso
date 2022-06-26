@@ -1,3 +1,5 @@
+data "aws_partition" "current" {
+}
 data "aws_secretsmanager_secret_version" "github" {
   secret_id = "github"
 }
@@ -102,7 +104,7 @@ data "aws_iam_policy_document" "codepipeline_policy" {
   }
   statement {
     effect    = "Allow"
-    resources = ["arn:aws:iam::*:role/ecsInstanceRole*"]
+    resources = ["arn:${data.aws_partition.current.partition}:iam::*:role/ecsInstanceRole*"]
     actions = [
       "iam:PassRole"
     ]
@@ -110,14 +112,13 @@ data "aws_iam_policy_document" "codepipeline_policy" {
       test     = "StringLike"
       variable = "iam:PassedToService"
       values = [
-        "ec2.amazonaws.com",
-        "ec2.amazonaws.com.cn"
+        "ec2.${data.aws_partition.current.dns_suffix}"
       ]
     }
   }
   statement {
     effect    = "Allow"
-    resources = ["arn:aws:iam::*:role/ecsAutoscaleRole*"]
+    resources = ["arn:${data.aws_partition.current.partition}:iam::*:role/ecsAutoscaleRole*"]
     actions = [
       "iam:PassRole"
     ]
@@ -125,8 +126,7 @@ data "aws_iam_policy_document" "codepipeline_policy" {
       test     = "StringLike"
       variable = "iam:PassedToService"
       values = [
-        "application-autoscaling.amazonaws.com",
-        "application-autoscaling.amazonaws.com.cn"
+        "application-autoscaling.${data.aws_partition.current.dns_suffix}"
       ]
     }
   }
