@@ -126,6 +126,14 @@ resource "aws_alb_target_group" "alb_target_group" {
   vpc_id      = var.vpc_id
   target_type = "ip"
 
+  health_check {
+    healthy_threshold = 5
+    unhealthy_threshold = 2
+    timeout = 5
+    interval = 30
+    matcher = "200,302"
+  }
+
   lifecycle {
     create_before_destroy = true
   }
