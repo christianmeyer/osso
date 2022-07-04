@@ -16,6 +16,7 @@ gem 'rake'
 gem 'sentry-raven'
 gem 'sinatra'
 gem 'mail-ses', '~> 0.1.2'
+gem 'aws-sdk-sesv2', '~> 1.27'
 
 group :test do
   gem 'database_cleaner-active_record'

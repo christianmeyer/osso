@@ -5,6 +5,8 @@ require 'dotenv/load' unless ENV['RACK_ENV']
 require './app'
 require 'osso'
 require 'sinatra/activerecord/rake'
+require 'mail'
+require 'mail-ses'
 
 if ENV['RACK_ENV'] == 'production'
   Mail.defaults do
