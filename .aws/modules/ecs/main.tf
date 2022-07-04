@@ -127,11 +127,12 @@ resource "aws_alb_target_group" "alb_target_group" {
   target_type = "ip"
 
   health_check {
+    path = "/health"
     healthy_threshold = 5
     unhealthy_threshold = 2
     timeout = 5
     interval = 30
-    matcher = "200,302"
+    matcher = "200"
   }
 
   lifecycle {
