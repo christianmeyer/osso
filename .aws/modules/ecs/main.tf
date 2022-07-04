@@ -59,6 +59,7 @@ data "template_file" "web_task" {
     database_url   = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
     log_group      = aws_cloudwatch_log_group.osso.name
     base_url       = "https://aws.ossoapp.io"
+    service_port   = 4567
     smtp_login     = local.smtp_creds.smtp_login
     smtp_password  = local.smtp_creds.smtp_password
     smtp_domain    = local.smtp_creds.smtp_domain
@@ -87,6 +88,7 @@ data "template_file" "db_migrate_task" {
     database_url   = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
     log_group      = "osso"
     base_url       = "https://aws.ossoapp.io"
+    service_port   = 4567
     smtp_login     = local.smtp_creds.smtp_login
     smtp_password  = local.smtp_creds.smtp_password
     smtp_domain    = local.smtp_creds.smtp_domain
