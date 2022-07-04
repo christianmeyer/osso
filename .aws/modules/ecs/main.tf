@@ -22,6 +22,8 @@ locals {
   smtp_creds = jsondecode(
     data.aws_secretsmanager_secret_version.smtp_creds.secret_string
   )
+
+  service_port = 4567
 }
 
 /*====
@@ -59,7 +61,7 @@ data "template_file" "web_task" {
     database_url   = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
     log_group      = aws_cloudwatch_log_group.osso.name
     base_url       = "https://aws.ossoapp.io"
-    service_port   = 4567
+    service_port   = local.service_port
     smtp_login     = local.smtp_creds.smtp_login
     smtp_password  = local.smtp_creds.smtp_password
     smtp_domain    = local.smtp_creds.smtp_domain
@@ -88,7 +90,7 @@ data "template_file" "db_migrate_task" {
     database_url   = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
     log_group      = "osso"
     base_url       = "https://aws.ossoapp.io"
-    service_port   = 4567
+    service_port   = local.service_port
     smtp_login     = local.smtp_creds.smtp_login
     smtp_password  = local.smtp_creds.smtp_password
     smtp_domain    = local.smtp_creds.smtp_domain
@@ -111,12 +113,15 @@ resource "aws_ecs_task_definition" "db_migrate" {
 App Load Balancer
 ======*/
 resource "random_id" "target_group_sufix" {
+  keepers = {
+    service_port = local.service_port
+  }
   byte_length = 2
 }
 
 resource "aws_alb_target_group" "alb_target_group" {
   name        = "${var.environment}-alb-target-group-${random_id.target_group_sufix.hex}"
-  port        = 80
+  port        = local.service_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
@@ -309,7 +314,7 @@ resource "aws_ecs_service" "web" {
   load_balancer {
     target_group_arn = aws_alb_target_group.alb_target_group.arn
     container_name   = "web"
-    container_port   = "80"
+    container_port   = local.service_port
   }
 
   #depends_on = [aws_alb_target_group.alb_target_group]
