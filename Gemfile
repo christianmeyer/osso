@@ -15,6 +15,7 @@ gem 'rack-cors'
 gem 'rake'
 gem 'sentry-raven'
 gem 'sinatra'
+gem 'mail-ses', '~> 0.1.2'
 
 group :test do
   gem 'database_cleaner-active_record'
