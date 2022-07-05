@@ -25,3 +25,7 @@ variable "environment" {
 variable "availability_zones" {
   type = list(string)
 }
+
+variable "admin_email" {
+  description = "Admin E-Mail"
+}
