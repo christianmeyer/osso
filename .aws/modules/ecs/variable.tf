@@ -49,3 +49,11 @@ variable "repository_name" {
 variable "secret_key_base" {
   description = "The secret key base to use in the app"
 }
+
+variable "domain" {
+  default = "The domain of your application"
+}
+
+variable "admin_email" {
+  description = "Admin E-Mail"
+}

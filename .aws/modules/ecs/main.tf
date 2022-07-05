@@ -1,13 +1,12 @@
+data "aws_region" "current" {
+}
+
 data "aws_secretsmanager_secret_version" "creds" {
   secret_id = "db-creds"
 }
 
 data "aws_secretsmanager_secret_version" "session_secret" {
   secret_id = "session_secret"
-}
-
-data "aws_secretsmanager_secret_version" "smtp_creds" {
-  secret_id = "smtp_creds"
 }
 
 locals {
@@ -18,11 +17,99 @@ locals {
     data.aws_secretsmanager_secret_version.session_secret.secret_string
   ).session_secret
 
-  smtp_creds = jsondecode(
-    data.aws_secretsmanager_secret_version.smtp_creds.secret_string
-  )
-
+  admin_email  = var.admin_email
+  base_url     = "https://${var.domain}"
+  region       = data.aws_region.current.name
   service_port = 4567
+}
+
+/*====
+DNS related
+======*/
+resource "aws_route53_zone" "osso" {
+  comment = ""
+  name    = var.domain
+}
+
+resource "aws_route53_record" "osso" {
+  zone_id = aws_route53_zone.osso.zone_id
+  name    = aws_route53_zone.osso.name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.alb_osso.dns_name
+    zone_id                = aws_lb.alb_osso.zone_id
+    evaluate_target_health = true
+  }
+}
+
+/* ACM SSL certificate */
+resource "aws_acm_certificate" "osso" {
+  domain_name       = aws_route53_zone.osso.name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "osso_acm_certificate_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.osso.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = aws_route53_zone.osso.zone_id
+}
+
+resource "aws_acm_certificate_validation" "osso" {
+  certificate_arn         = aws_acm_certificate.osso.arn
+  validation_record_fqdns = [for record in aws_route53_record.osso_acm_certificate_validation : record.fqdn]
+}
+
+/* SES setup */
+resource "aws_ses_email_identity" "admin" {
+  email = local.admin_email
+}
+
+resource "aws_ses_domain_identity" "osso" {
+  domain = aws_route53_zone.osso.name
+}
+
+resource "aws_route53_record" "osso_amazonses_verification_record" {
+  zone_id = aws_route53_zone.osso.zone_id
+  name    = "_amazonses.${aws_ses_domain_identity.osso.id}"
+  type    = "TXT"
+  ttl     = "600"
+  records = [aws_ses_domain_identity.osso.verification_token]
+}
+
+resource "aws_ses_domain_identity_verification" "osso_verification" {
+  domain = aws_ses_domain_identity.osso.id
+
+  depends_on = [aws_route53_record.osso_amazonses_verification_record]
+}
+
+/* SES DKIM validation */
+resource "aws_ses_domain_dkim" "osso" {
+  domain = aws_ses_domain_identity.osso.domain
+}
+
+resource "aws_route53_record" "osso_amazonses_dkim_record" {
+  count   = 3
+  zone_id = aws_route53_zone.osso.zone_id
+  name    = "${element(aws_ses_domain_dkim.osso.dkim_tokens, count.index)}._domainkey"
+  type    = "CNAME"
+  ttl     = "600"
+  records = ["${element(aws_ses_domain_dkim.osso.dkim_tokens, count.index)}.dkim.amazonses.com"]
 }
 
 /*====
@@ -56,15 +143,14 @@ data "template_file" "web_task" {
 
   vars = {
     image          = aws_ecr_repository.osso_app.repository_url
+    admin_email    = local.admin_email
+    region         = local.region
     session_secret = local.session_secret
     database_url   = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
     log_group      = aws_cloudwatch_log_group.osso.name
-    base_url       = "https://aws.ossoapp.io"
+    base_url       = local.base_url
     service_port   = local.service_port
-    smtp_login     = local.smtp_creds.smtp_login
-    smtp_password  = local.smtp_creds.smtp_password
-    smtp_domain    = local.smtp_creds.smtp_domain
-    smtp_server    = local.smtp_creds.smtp_server
+    identity_arn   = aws_ses_domain_identity.osso.arn
   }
 }
 
@@ -85,15 +171,14 @@ data "template_file" "db_migrate_task" {
 
   vars = {
     image          = "sambauch/osso"
+    admin_email    = local.admin_email
+    region         = local.region
     session_secret = local.session_secret
     database_url   = "postgresql://${local.db_creds.username}:${local.db_creds.password}@${var.database_endpoint}:5432/${var.database_name}?encoding=utf8&pool=40"
-    log_group      = "osso"
-    base_url       = "https://aws.ossoapp.io"
+    log_group      = aws_cloudwatch_log_group.osso.name
+    base_url       = local.base_url
     service_port   = local.service_port
-    smtp_login     = local.smtp_creds.smtp_login
-    smtp_password  = local.smtp_creds.smtp_password
-    smtp_domain    = local.smtp_creds.smtp_domain
-    smtp_server    = local.smtp_creds.smtp_server
+    identity_arn   = aws_ses_domain_identity.osso.arn
   }
 }
 
@@ -126,12 +211,12 @@ resource "aws_lb_target_group" "alb_target_group" {
   target_type = "ip"
 
   health_check {
-    path = "/health"
-    healthy_threshold = 5
+    path                = "/health"
+    healthy_threshold   = 5
     unhealthy_threshold = 2
-    timeout = 5
-    interval = 30
-    matcher = "200"
+    timeout             = 5
+    interval            = 30
+    matcher             = "200"
   }
 
   lifecycle {
@@ -148,6 +233,13 @@ resource "aws_security_group" "web_inbound_sg" {
   ingress {
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -172,19 +264,38 @@ resource "aws_security_group" "web_inbound_sg" {
 }
 
 resource "aws_lb" "alb_osso" {
-  name            = "${var.environment}-alb-rails-terraform"
-  subnets         = var.public_subnet_ids
-  security_groups = concat(var.security_groups_ids, [aws_security_group.web_inbound_sg.id])
+  name               = "${var.environment}-alb-rails-terraform"
+  load_balancer_type = "application"
+  subnets            = var.public_subnet_ids
+  security_groups    = concat(var.security_groups_ids, [aws_security_group.web_inbound_sg.id])
 
   tags = {
     Name = "${var.environment}-alb-osso"
   }
 }
 
-resource "aws_lb_listener" "osso" {
+resource "aws_lb_listener" "osso_http" {
   load_balancer_arn = aws_lb.alb_osso.arn
   port              = "80"
   protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "osso_https" {
+  load_balancer_arn = aws_lb.alb_osso.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate_validation.osso.certificate_arn
   depends_on        = [aws_lb_target_group.alb_target_group]
 
   default_action {
@@ -260,7 +371,9 @@ data "aws_iam_policy_document" "ecs_execution_role_policy" {
       "ecr:GetDownloadUrlForLayer",
       "ecr:BatchGetImage",
       "logs:CreateLogStream",
-      "logs:PutLogEvents"
+      "logs:PutLogEvents",
+      "ses:SendEmail",
+      "ses:SendRawEmail"
     ]
   }
 }
