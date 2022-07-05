@@ -10,7 +10,6 @@ data "aws_secretsmanager_secret_version" "smtp_creds" {
   secret_id = "smtp_creds"
 }
 
-
 locals {
   db_creds = jsondecode(
     data.aws_secretsmanager_secret_version.creds.secret_string
@@ -119,7 +118,7 @@ resource "random_id" "target_group_sufix" {
   byte_length = 2
 }
 
-resource "aws_alb_target_group" "alb_target_group" {
+resource "aws_lb_target_group" "alb_target_group" {
   name        = "${var.environment}-alb-target-group-${random_id.target_group_sufix.hex}"
   port        = local.service_port
   protocol    = "HTTP"
@@ -172,7 +171,7 @@ resource "aws_security_group" "web_inbound_sg" {
   }
 }
 
-resource "aws_alb" "alb_osso" {
+resource "aws_lb" "alb_osso" {
   name            = "${var.environment}-alb-rails-terraform"
   subnets         = var.public_subnet_ids
   security_groups = concat(var.security_groups_ids, [aws_security_group.web_inbound_sg.id])
@@ -182,14 +181,14 @@ resource "aws_alb" "alb_osso" {
   }
 }
 
-resource "aws_alb_listener" "osso" {
-  load_balancer_arn = aws_alb.alb_osso.arn
+resource "aws_lb_listener" "osso" {
+  load_balancer_arn = aws_lb.alb_osso.arn
   port              = "80"
   protocol          = "HTTP"
-  depends_on        = [aws_alb_target_group.alb_target_group]
+  depends_on        = [aws_lb_target_group.alb_target_group]
 
   default_action {
-    target_group_arn = aws_alb_target_group.alb_target_group.arn
+    target_group_arn = aws_lb_target_group.alb_target_group.arn
     type             = "forward"
   }
 }
@@ -313,7 +312,7 @@ resource "aws_ecs_service" "web" {
   desired_count   = 2
   launch_type     = "FARGATE"
   cluster         = aws_ecs_cluster.cluster.id
-  depends_on      = [aws_iam_role_policy.ecs_service_role_policy, aws_alb_target_group.alb_target_group]
+  depends_on      = [aws_iam_role_policy.ecs_service_role_policy, aws_lb_target_group.alb_target_group]
 
   network_configuration {
     security_groups = concat(var.security_groups_ids, [aws_security_group.ecs_service.id])
@@ -321,12 +320,12 @@ resource "aws_ecs_service" "web" {
   }
 
   load_balancer {
-    target_group_arn = aws_alb_target_group.alb_target_group.arn
+    target_group_arn = aws_lb_target_group.alb_target_group.arn
     container_name   = "web"
     container_port   = local.service_port
   }
 
-  #depends_on = [aws_alb_target_group.alb_target_group]
+  #depends_on = [aws_lb_target_group.alb_target_group]
 }
 
 

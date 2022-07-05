@@ -11,11 +11,11 @@ output "service_name" {
 }
 
 output "alb_dns_name" {
-  value = aws_alb.alb_osso.dns_name
+  value = aws_lb.alb_osso.dns_name
 }
 
 output "alb_zone_id" {
-  value = aws_alb.alb_osso.zone_id
+  value = aws_lb.alb_osso.zone_id
 }
 
 output "security_group_id" {
