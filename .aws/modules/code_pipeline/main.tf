@@ -1,21 +1,13 @@
 data "aws_partition" "current" {
 }
-data "aws_secretsmanager_secret_version" "github" {
-  secret_id = "github"
-}
 
-data "aws_secretsmanager_secret_version" "dockerhub-creds" {
-  secret_id = "dockerhub-creds"
+data "aws_caller_identity" "current" {
 }
 
 locals {
-  github = jsondecode(
-    data.aws_secretsmanager_secret_version.github.secret_string
-  )
-
-  dockerhub_creds = jsondecode(
-    data.aws_secretsmanager_secret_version.dockerhub-creds.secret_string
-  )
+  github_owner  = "enterprise-oss"
+  github_repo   = "osso"
+  github_branch = "docker"
 }
 
 resource "aws_s3_bucket" "source" {
@@ -57,7 +49,8 @@ data "aws_iam_policy_document" "codepipeline_policy" {
       "s3:GetObjectVersion",
       "s3:GetBucketVersioning",
       "s3:List*",
-      "s3:PutObject"
+      "s3:PutObject",
+      "s3:PutObjectAcl"
     ]
   }
   statement {
@@ -146,6 +139,15 @@ data "aws_iam_policy_document" "codepipeline_policy" {
       ]
     }
   }
+  statement {
+    effect = "Allow"
+    resources = [
+      aws_codestarconnections_connection.github.arn
+    ]
+    actions = [
+      "codestar-connections:UseConnection"
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "codepipeline_policy" {
@@ -217,14 +219,11 @@ data "template_file" "buildspec" {
   template = file("${path.module}/buildspec.yml")
 
   vars = {
-    repository_url     = var.repository_url
-    region             = var.region
     cluster_name       = var.ecs_cluster_name
     subnet_id          = var.run_task_subnet_id
     security_group_ids = join(",", var.run_task_security_group_ids)
   }
 }
-
 
 resource "aws_codebuild_project" "osso_build" {
   name          = "osso-codebuild"
@@ -243,13 +242,23 @@ resource "aws_codebuild_project" "osso_build" {
     image_pull_credentials_type = "CODEBUILD"
 
     environment_variable {
-      name  = "DOCKER_USERNAME"
-      value = local.dockerhub_creds.username
+      name  = "AWS_DEFAULT_REGION"
+      value = var.region
     }
 
     environment_variable {
-      name  = "DOCKER_PASSWORD"
-      value = local.dockerhub_creds.password
+      name  = "AWS_ACCOUNT_ID"
+      value = data.aws_caller_identity.current.account_id
+    }
+
+    environment_variable {
+      name  = "IMAGE_REPO_NAME"
+      value = var.repository_name
+    }
+
+    environment_variable {
+      name  = "REPOSITORY_URI"
+      value = var.repository_url
     }
   }
 
@@ -260,6 +269,10 @@ resource "aws_codebuild_project" "osso_build" {
 }
 
 /* CodePipeline */
+resource "aws_codestarconnections_connection" "github" {
+  name          = "github-connection"
+  provider_type = "GitHub"
+}
 
 resource "aws_codepipeline" "pipeline" {
   name     = "osso-pipeline"
@@ -276,16 +289,15 @@ resource "aws_codepipeline" "pipeline" {
     action {
       name             = "Source"
       category         = "Source"
-      owner            = "ThirdParty"
-      provider         = "GitHub"
+      owner            = "AWS"
+      provider         = "CodeStarSourceConnection"
       version          = "1"
       output_artifacts = ["source"]
 
       configuration = {
-        Owner      = "enterprise-oss"
-        Repo       = "osso"
-        Branch     = "docker"
-        OAuthToken = local.github.oauth_token
+        ConnectionArn    = aws_codestarconnections_connection.github.arn
+        FullRepositoryId = "${local.github_owner}/${local.github_repo}"
+        BranchName       = local.github_branch
       }
     }
   }
