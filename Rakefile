@@ -6,6 +6,7 @@ require './app'
 require 'osso'
 require 'sinatra/activerecord/rake'
 require 'mail'
+require 'mail/check_delivery_params'
 require 'mail-ses'
 
 if ENV['RACK_ENV'] == 'production'
@@ -14,7 +15,7 @@ if ENV['RACK_ENV'] == 'production'
     when 'ses'
       delivery_method Mail::SES, {
         region: ENV['SES_REGION'],
-        use_iam_profile: true,
+        credentials: Aws::ECSCredentials.new,
         mail_options: ENV['SES_IDENTITY_ARN'] ? {
           from_email_address_identity_arn: ENV['SES_IDENTITY_ARN']
         } : nil
